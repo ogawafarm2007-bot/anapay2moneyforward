@@ -149,7 +149,6 @@ def gmail2spredsheet(worksheet):
 
 def login_mf():
     """login moneyforward"""
-
     email = os.getenv("EMAIL")
     password = os.getenv("PASSWORD")
 
@@ -160,34 +159,45 @@ def login_mf():
     options.add_argument("--headless")
     options.add_argument("--width=1920")
     options.add_argument("--height=1080")
+    # ロボットだとバレにくくするおまじない
+    options.set_preference("general.useragent.override", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0")
     
-    # ログイン専用のURLに直接飛ぶようにします
-    helium.start_firefox("https://id.moneyforward.com/sign_in/email", options=options)
+    helium.start_firefox("https://id.moneyforward.com/sign_in", options=options)
     
-    # 1. メールアドレス入力
-    logging.info("Entering email...")
-    # 入力欄の正確なラベル名に合わせて修正
-    helium.wait_until(helium.TextField("マネーフォワードID（メールアドレス）").exists, timeout_secs=30)
-    helium.write(email, into="マネーフォワードID（メールアドレス）")
-    # 「次へ」ボタン、または「同意してログイン」ボタンを押す
-    if helium.Button("次へ").exists():
-        helium.click("次へ")
-    else:
-        helium.click("同意してログイン")
+    try:
+        # 1. メールアドレス入力（より確実な方法で探す）
+        logging.info("Step 1: Entering email...")
+        # 「メールアドレス」という文字がある入力欄を探す
+        email_field = helium.TextField("マネーフォワードID（メールアドレス）")
+        if not email_field.exists():
+             email_field = helium.TextField("メールアドレス")
+             
+        helium.wait_until(email_field.exists, timeout_secs=30)
+        helium.write(email, into=email_field)
+        
+        # 「次へ」ボタン、または「同意してログイン」を押す
+        if helium.Button("次へ").exists():
+            helium.click("次へ")
+        else:
+            helium.click(helium.S("input[type='submit']"))
 
-    # 2. パスワード入力
-    logging.info("Entering password...")
-    helium.wait_until(helium.TextField("パスワード").exists, timeout_secs=30)
-    helium.write(password, into="パスワード")
-    
-    # ログインボタンをクリック
-    helium.click("ログインする")
+        # 2. パスワード入力
+        logging.info("Step 2: Entering password...")
+        helium.wait_until(helium.TextField("パスワード").exists, timeout_secs=30)
+        helium.write(password, into="パスワード")
+        helium.click("ログインする")
 
-    # 3. ログイン完了の確認
-    logging.info("Waiting for redirect to home page...")
-    # 「手入力」ボタンが出る＝家計簿画面に入れたということ
-    helium.wait_until(helium.Button("手入力").exists, timeout_secs=60)
+        # 3. ログイン完了の確認
+        logging.info("Step 3: Checking if logged in...")
+        helium.wait_until(helium.Button("手入力").exists, timeout_secs=60)
+        logging.info("Login Success!")
 
+    except Exception as e:
+        # 失敗したら画面を保存する
+        logging.error(f"Login failed: {e}")
+        helium.get_driver().save_screenshot("login_error.png")
+        logging.info("Saved error screenshot to login_error.png")
+        raise e
 def add_mf_record(dt: datetime, amount: int, store: str, store_info: dict | None):
     """
     add record to moneyfoward
