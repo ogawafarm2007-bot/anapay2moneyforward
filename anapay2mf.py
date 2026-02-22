@@ -152,7 +152,13 @@ def login_mf():
     email = os.getenv("EMAIL")
     password = os.getenv("PASSWORD")
 
-    logging.info("Login to moneyfoward")
+    # --- ここを追加：メールアドレスが空っぽだったらエラーを出す ---
+    if not email or not password:
+        logging.error("ERROR: EMAIL or PASSWORD is not set in GitHub Secrets!")
+        return
+    # --------------------------------------------------------
+
+    logging.info(f"Login to moneyfoward with: {email}") # 念のためログに出す
     
     from selenium.webdriver.firefox.options import Options
     options = Options()
