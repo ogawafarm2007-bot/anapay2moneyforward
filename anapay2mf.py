@@ -166,7 +166,7 @@ def login_mf():
     import time
     
     options = Options()
-    options.add_argument("--headless")
+    # options.add_argument("--headless")
     options.add_argument("--width=1920")
     options.add_argument("--height=1080")
     options.set_preference("intl.accept_languages", "ja-JP, ja")
@@ -217,13 +217,7 @@ def login_mf():
         pass_input = wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, pass_selector)))
         pass_input.send_keys(password)
         
-        # --- 2.5 ログイン完了ボタンを強引に押す ---
-        logging.info("Step 2.5: Clicking final Login button...")
-        try:
-            submit_btn = driver.find_element(By.XPATH, submit_xpath)
-            driver.execute_script("arguments[0].click();", submit_btn)
-        except:
-            pass_input.send_keys(Keys.ENTER)
+# options.add_argument("--headless")  <-- これをコメントアウトして試す価値あり
         
 # --- 3. ログイン成功確認 ---
         logging.info("Step 3: Verifying login...")
