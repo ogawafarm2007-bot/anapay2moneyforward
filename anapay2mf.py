@@ -166,7 +166,9 @@ def login_mf():
     import time
     
     options = Options()
-    # options.add_argument("--headless")
+  # ヘッドレス（画面なし）であることを隠すための設定を追加
+    options.add_argument("--headless")
+    options.add_argument("--disable-blink-features=AutomationControlled")
     options.add_argument("--width=1920")
     options.add_argument("--height=1080")
     options.set_preference("intl.accept_languages", "ja-JP, ja")
