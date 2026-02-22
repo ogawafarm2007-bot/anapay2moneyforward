@@ -152,13 +152,13 @@ def login_mf():
     email = os.getenv("EMAIL")
     password = os.getenv("PASSWORD")
 
-    # --- ここを追加：メールアドレスが空っぽだったらエラーを出す ---
-    if not email or not password:
-        logging.error("ERROR: EMAIL or PASSWORD is not set in GitHub Secrets!")
-        return
-    # --------------------------------------------------------
-
-    logging.info(f"Login to moneyfoward with: {email}") # 念のためログに出す
+    # --- チェック機能 ---
+    if not email:
+        logging.error("!!! EMAIL IS EMPTY !!! Check GitHub Secrets.")
+        raise ValueError("EMAIL secret is not set")
+    
+    # ログにメールアドレスの「最初の3文字」だけ出して確認（セキュリティ配慮）
+    logging.info(f"Login to moneyfoward with email starting with: {email[:3]}***")
     
     from selenium.webdriver.firefox.options import Options
     options = Options()
@@ -167,41 +167,32 @@ def login_mf():
     options.add_argument("--height=1080")
     options.set_preference("intl.accept_languages", "ja-JP, ja")
     
-    # 最初からメールアドレス入力画面を開く
+    # 直接入力画面へ
     helium.start_firefox("https://id.moneyforward.com/sign_in/email", options=options)
     
     try:
         # 1. メールアドレス入力
         logging.info("Step 1: Entering email...")
-        # 「メールアドレス」という言葉に頼らず、最初の入力欄を直接指定
-        email_field = helium.TextField(below="メールアドレス")
-        if not email_field.exists():
-            email_field = helium.S("input[type='email']") # 型で探す予備策
-            
-        helium.wait_until(email_field.exists, timeout_secs=30)
-        helium.write(email, into=email_field)
+        # 画面上の「最初の入力欄」を強制的に狙う（名前が何であれ）
+        email_input = helium.S("input[type='email']")
+        if not email_input.exists():
+             email_input = helium.S("input") # それでもダメなら最初のinputタグ
+             
+        helium.wait_until(email_input.exists, timeout_secs=30)
+        helium.write(email, into=email_input)
         
-        # 「ログインする」ボタンをクリック
-        logging.info("Clicking login button...")
-        # 文字列だけでなく、オレンジ色のボタン（submitタイプ）を直接クリック
-        login_button = helium.Button("ログインする")
-        if login_button.exists():
-            helium.click(login_button)
-        else:
-            helium.click(helium.S("input[type='submit']"))
+        # ログインするボタンをクリック
+        helium.click("ログインする")
 
         # 2. パスワード入力
         logging.info("Step 2: Entering password...")
-        # パスワード欄が出るまで待つ
-        pass_field = helium.TextField(below="パスワード")
-        if not pass_field.exists():
-            pass_field = helium.S("input[type='password']")
-            
-        helium.wait_until(pass_field.exists, timeout_secs=30)
-        helium.write(password, into=pass_field)
+        # パスワード欄が出るまで待機
+        pass_input = helium.S("input[type='password']")
+        helium.wait_until(pass_input.exists, timeout_secs=30)
+        helium.write(password, into=pass_input)
         
-        # 再度「ログインする」ボタンをクリック
-        helium.click(helium.S("input[type='submit']"))
+        # ログインするボタンをクリック
+        helium.click("ログインする")
 
         # 3. ログイン完了の確認
         logging.info("Step 3: Checking if logged in...")
@@ -210,7 +201,6 @@ def login_mf():
 
     except Exception as e:
         logging.error(f"Login failed: {e}")
-        # 失敗した時の証拠写真を撮る
         helium.get_driver().save_screenshot("login_error.png")
         raise e
 def add_mf_record(dt: datetime, amount: int, store: str, store_info: dict | None):
