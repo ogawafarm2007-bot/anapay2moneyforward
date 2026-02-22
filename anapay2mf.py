@@ -167,26 +167,38 @@ def login_mf():
     try:
         # 1. メールアドレス入力
         logging.info("Step 1: Entering email...")
-        # 画面に表示されている「メールアドレス」という文字の横の入力欄を探す
-        helium.wait_until(helium.TextField("メールアドレス").exists, timeout_secs=30)
-        helium.write(email, into="メールアドレス")
+        # 「メールアドレス」という言葉に頼らず、最初の入力欄を直接指定
+        email_field = helium.TextField(below="メールアドレス")
+        if not email_field.exists():
+            email_field = helium.S("input[type='email']") # 型で探す予備策
+            
+        helium.wait_until(email_field.exists, timeout_secs=30)
+        helium.write(email, into=email_field)
         
-        # オレンジ色の「ログインする」ボタンをクリック
+        # 「ログインする」ボタンをクリック
         logging.info("Clicking login button...")
-        helium.click("ログインする")
+        # 文字列だけでなく、オレンジ色のボタン（submitタイプ）を直接クリック
+        login_button = helium.Button("ログインする")
+        if login_button.exists():
+            helium.click(login_button)
+        else:
+            helium.click(helium.S("input[type='submit']"))
 
         # 2. パスワード入力
         logging.info("Step 2: Entering password...")
         # パスワード欄が出るまで待つ
-        helium.wait_until(helium.TextField("パスワード").exists, timeout_secs=30)
-        helium.write(password, into="パスワード")
+        pass_field = helium.TextField(below="パスワード")
+        if not pass_field.exists():
+            pass_field = helium.S("input[type='password']")
+            
+        helium.wait_until(pass_field.exists, timeout_secs=30)
+        helium.write(password, into=pass_field)
         
         # 再度「ログインする」ボタンをクリック
-        helium.click("ログインする")
+        helium.click(helium.S("input[type='submit']"))
 
         # 3. ログイン完了の確認
         logging.info("Step 3: Checking if logged in...")
-        # 「手入力」ボタンが表示されれば成功
         helium.wait_until(helium.Button("手入力").exists, timeout_secs=60)
         logging.info("Login Success!")
 
