@@ -158,32 +158,34 @@ def login_mf():
     from selenium.webdriver.firefox.options import Options
     options = Options()
     options.add_argument("--headless")
-    # 画面サイズを大きく設定（ボタンが隠れないようにする）
     options.add_argument("--width=1920")
     options.add_argument("--height=1080")
     
-    helium.start_firefox(MF_URL, options=options)
+    # ログイン専用のURLに直接飛ぶようにします
+    helium.start_firefox("https://id.moneyforward.com/sign_in/email", options=options)
     
-    # ページが読み込まれるまで少し長めに待つ
-    logging.info("Waiting for login page...")
-    
-    # 「ログイン」という文字が含まれるボタンやリンクを柔軟に探す
-    try:
-        helium.wait_until(helium.Text("ログイン").exists, timeout_secs=30)
-        helium.click("ログイン")
-    except:
-        # すでにログイン画面にいる場合や、ボタン名が違う場合の予備策
-        pass
+    # 1. メールアドレス入力
+    logging.info("Entering email...")
+    # 入力欄の正確なラベル名に合わせて修正
+    helium.wait_until(helium.TextField("マネーフォワードID（メールアドレス）").exists, timeout_secs=30)
+    helium.write(email, into="マネーフォワードID（メールアドレス）")
+    # 「次へ」ボタン、または「同意してログイン」ボタンを押す
+    if helium.Button("次へ").exists():
+        helium.click("次へ")
+    else:
+        helium.click("同意してログイン")
 
-    # メールアドレス入力欄が出るまで待つ
-    helium.wait_until(helium.TextField("メールアドレス").exists, timeout_secs=30)
-    helium.write(email, into="メールアドレス")
-    helium.click("マネーフォワードIDでログイン") # または「次へ」など
-
-    helium.wait_until(helium.TextField("パスワード").exists)
+    # 2. パスワード入力
+    logging.info("Entering password...")
+    helium.wait_until(helium.TextField("パスワード").exists, timeout_secs=30)
     helium.write(password, into="パスワード")
+    
+    # ログインボタンをクリック
     helium.click("ログインする")
 
+    # 3. ログイン完了の確認
+    logging.info("Waiting for redirect to home page...")
+    # 「手入力」ボタンが出る＝家計簿画面に入れたということ
     helium.wait_until(helium.Button("手入力").exists, timeout_secs=60)
 
 def add_mf_record(dt: datetime, amount: int, store: str, store_info: dict | None):
