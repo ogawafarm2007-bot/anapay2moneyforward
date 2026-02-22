@@ -199,14 +199,37 @@ def login_mf():
         except:
             pass
 
-        # --- 1. メールアドレス入力 ---
+# --- 1. メールアドレス入力 ---
         logging.info("Step 1: Entering email...")
-        # セレクターをより汎用的なもの（ID or Name or Type）に変更
-        email_selector = "input[name='mfid_user[email]'], input[type='email'], #mfid_user_email"
-        email_input = wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, email_selector)))
         
-        # 入力前に一度クリックしてフォーカスを当てる
+        # 複数の候補（Name, ID, CSS, Type）で、とにかくメール入力欄らしきものを探す
+        selectors = [
+            (By.NAME, "mfid_user[email]"),
+            (By.ID, "mfid_user_email"),
+            (By.CSS_SELECTOR, "input[type='email']"),
+            (By.XPATH, "//input[@placeholder='メールアドレス']"),
+            (By.CSS_SELECTOR, "input.is-error") # 稀にエラー状態で表示される場合
+        ]
+        
+        email_input = None
+        for selector_type, selector_value in selectors:
+            try:
+                email_input = wait.until(EC.visibility_of_element_located((selector_type, selector_value)))
+                if email_input:
+                    logging.info(f"Found email input with: {selector_value}")
+                    break
+            except:
+                continue
+        
+        if not email_input:
+            # 見つからなかった場合、現在の画面のスクリーンショットを撮ってエラーを出す
+            driver.save_screenshot("email_not_found.png")
+            raise Exception("Email input field not found on the page.")
+
+        # 入力前に一度クリックして、中の文字を全選択して消去（念のため）
         email_input.click()
+        email_input.send_keys(Keys.CONTROL + "a")
+        email_input.send_keys(Keys.BACKSPACE)
         time.sleep(1)
         
         # 1文字ずつ打ち込む
