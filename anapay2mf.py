@@ -252,33 +252,26 @@ def add_mf_record(dt: datetime, amount: int, store: str, store_info: dict | None
     from selenium.webdriver.common.by import By
     from selenium.webdriver.support.ui import WebDriverWait
     from selenium.webdriver.support import expected_conditions as EC
-    import time
     
     driver = helium.get_driver()
     wait = WebDriverWait(driver, 30)
 
-    # 【重要】家計簿の入力ボタンがある「入出金ページ」へ直接移動する
+    # 【超重要】「手入力」ボタンがある入出金ページに直接移動する
     logging.info("Directly jumping to CashFlow page...")
-    driver.get("https://moneyforward.com/cf")
-    time.sleep(10) # 読み込みをしっかり待つ
+    driver.get("https://moneyforward.com/cf") 
+    time.sleep(10) # ページが完全に読み込まれるまで待機
 
     # 1. 「手入力」ボタンが表示されるのを待ってクリック
     logging.info("Waiting for 'Manual Input' button...")
-    # XPATHで「手入力」という文字を持つ要素を広範囲に探す
     input_btn_xpath = "//*[contains(text(), '手入力')]"
-    try:
-        input_btn = wait.until(EC.element_to_be_clickable((By.XPATH, input_btn_xpath)))
-        # 普通のクリックが効かない場合に備えてJavaScriptで強制クリック
-        driver.execute_script("arguments[0].click();", input_btn)
-    except Exception as e:
-        logging.error(f"Could not click 'Manual Input' button: {e}")
-        driver.save_screenshot("after_jump_error.png")
-        raise e
     
-    time.sleep(3) # フォームが開くのを待つ
+    # タイムアウト対策：ボタンが見つかるまで粘る
+    input_btn = wait.until(EC.element_to_be_clickable((By.XPATH, input_btn_xpath)))
+    driver.execute_script("arguments[0].click();", input_btn)
+    
+    time.sleep(3) # フォームがふわっと開くのを待つ
 
-    # --- ここから下は元のコード（helium.write(...) から）を続けてください ---
-    logging.info(f"Writing date: {dt:%Y/%m/%d}")
+    # --- ここから下は元のコード（helium.write(...) から） ---
     helium.write(f"{dt:%Y/%m/%d}", into="日付")
     # ...（以下略）
 
