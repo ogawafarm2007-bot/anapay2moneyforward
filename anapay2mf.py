@@ -148,14 +148,21 @@ def gmail2spredsheet(worksheet):
 
 
 def login_mf():
-    """login moneyforward sbi"""
+    """login moneyforward"""
 
     email = os.getenv("EMAIL")
     password = os.getenv("PASSWORD")
 
     # https://selenium-python-helium.readthedocs.io/en/latest/api.html
     logging.info("Login to moneyfoward")
-    helium.start_firefox(MF_URL)
+    
+    # --- ここから修正：GitHub環境用の設定 ---
+    from selenium.webdriver.firefox.options import Options
+    options = Options()
+    options.add_argument("--headless")
+    helium.start_firefox(MF_URL, options=options)
+    # --- ここまで修正 ---
+
     helium.wait_until(helium.Button("ログイン").exists)
     helium.write(email, into="メールアドレス")
     helium.write(password, into="パスワード")
