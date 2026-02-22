@@ -170,32 +170,30 @@ def login_mf():
     options.add_argument("--height=1080")
     options.set_preference("intl.accept_languages", "ja-JP, ja")
     
-    # ブラウザの起動まではHeliumを使います
+    # ブラウザの起動
     helium.start_firefox("https://id.moneyforward.com/sign_in/email", options=options)
     driver = helium.get_driver()
     
     try:
         logging.info("Step 1: Waiting for page to load...")
-        time.sleep(3) # 画面が完全に描画されるまで3秒待機
+        time.sleep(3) # 画面が描画されるまで3秒待機
         
-        logging.info("Step 1: Entering email...")
+        logging.info("Step 1: Entering email with Selenium...")
         wait = WebDriverWait(driver, 30)
         
-        # HTMLの構造（type="email"）から直接入力欄を狙い撃つ（絶対外さない方法）
-        email_input = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "input[type='email'], input[name*='email']")))
+        # HTMLの構造から直接入力欄を狙い撃つ
+        email_input = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='email'], input[name*='email']")))
         email_input.clear()
         email_input.send_keys(email)
         
         logging.info("Clicking login button...")
-        # 送信ボタンを直接クリック
         submit_btn = driver.find_element(By.CSS_SELECTOR, "input[type='submit'], button[type='submit']")
         submit_btn.click()
         
-        logging.info("Step 2: Entering password...")
-        time.sleep(3) # 画面遷移を3秒待機
+        logging.info("Step 2: Entering password with Selenium...")
+        time.sleep(3)
         
-        # パスワード入力欄を狙い撃つ
-        pass_input = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "input[type='password'], input[name*='password']")))
+        pass_input = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='password'], input[name*='password']")))
         pass_input.clear()
         pass_input.send_keys(password)
         
@@ -204,7 +202,6 @@ def login_mf():
         submit_btn2.click()
         
         logging.info("Step 3: Checking if logged in...")
-        # ログイン完了後、「手入力」という文字が出るか確認
         wait.until(EC.presence_of_element_located((By.XPATH, "//*[contains(text(), '手入力')]")))
         logging.info("Login Success!")
 
