@@ -249,10 +249,24 @@ def add_mf_record(dt: datetime, amount: int, store: str, store_info: dict | None
     """
     add record to moneyfoward
     """
+    # --- ここから修正（「手入力」ボタンを確実に押すための処理） ---
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support.ui import WebDriverWait
+    from selenium.webdriver.support import expected_conditions as EC
+    
+    driver = helium.get_driver()
+    wait = WebDriverWait(driver, 30)
+    
+    logging.info("Waiting for 'Manual Input' button...")
+    # 日本語でも英語でも「手入力」という文字を含むボタンを探してクリック
+    input_btn_xpath = "//*[contains(text(), '手入力')]"
+    input_btn = wait.until(EC.element_to_be_clickable((By.XPATH, input_btn_xpath)))
+    driver.execute_script("arguments[0].click();", input_btn)
+    
+    time.sleep(2) # フォームが開くのを少し待つ
+    # --- ここまで修正 ---
 
-    # https://selenium-python-helium.readthedocs.io/en/latest/api.html
-    helium.click("手入力")
-    # breakpoint()
+    # 以下は元のコードのまま（日付の入力から再開）
     helium.write(f"{dt:%Y/%m/%d}", into="日付")
     helium.click("日付")
 
