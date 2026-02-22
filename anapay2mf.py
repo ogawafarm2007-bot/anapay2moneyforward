@@ -155,26 +155,36 @@ def login_mf():
 
     logging.info("Login to moneyfoward")
     
-    # --- ここを最新の設定に差し替え ---
     from selenium.webdriver.firefox.options import Options
-    from selenium.webdriver.firefox.service import Service
-    
     options = Options()
     options.add_argument("--headless")
-    # Firefoxの場所を明示
-    options.binary_location = "/usr/bin/firefox" 
+    # 画面サイズを大きく設定（ボタンが隠れないようにする）
+    options.add_argument("--width=1920")
+    options.add_argument("--height=1080")
     
     helium.start_firefox(MF_URL, options=options)
-    # --- ここまで ---
+    
+    # ページが読み込まれるまで少し長めに待つ
+    logging.info("Waiting for login page...")
+    
+    # 「ログイン」という文字が含まれるボタンやリンクを柔軟に探す
+    try:
+        helium.wait_until(helium.Text("ログイン").exists, timeout_secs=30)
+        helium.click("ログイン")
+    except:
+        # すでにログイン画面にいる場合や、ボタン名が違う場合の予備策
+        pass
 
-    helium.wait_until(helium.Button("ログイン").exists)
-    # （以下、メールアドレス入力などの続きはそのまま）
+    # メールアドレス入力欄が出るまで待つ
+    helium.wait_until(helium.TextField("メールアドレス").exists, timeout_secs=30)
     helium.write(email, into="メールアドレス")
+    helium.click("マネーフォワードIDでログイン") # または「次へ」など
+
+    helium.wait_until(helium.TextField("パスワード").exists)
     helium.write(password, into="パスワード")
-    helium.click("ログイン")
+    helium.click("ログインする")
 
-    helium.wait_until(helium.Button("手入力").exists)
-
+    helium.wait_until(helium.Button("手入力").exists, timeout_secs=60)
 
 def add_mf_record(dt: datetime, amount: int, store: str, store_info: dict | None):
     """
