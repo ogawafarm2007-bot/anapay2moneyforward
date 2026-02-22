@@ -227,33 +227,32 @@ def login_mf():
         
 # --- 3. ログイン成功確認 ---
         logging.info("Step 3: Verifying login...")
-        time.sleep(5)
         
-        # ログイン後に家計簿ページへ移動し、完全に切り替わるまで粘り強く待つ
-        logging.info("Navigating to Money Forward ME Top...")
-        driver.get("https://moneyforward.com/") 
-        
-        # 画面がID画面から家計簿画面に切り替わるのを最大30秒待機
-        for i in range(5):
-            logging.info(f"Waiting for login completion... (Attempt {i+1})")
+        # ログインボタンを押した後、URLが「id.moneyforward.com」から切り替わるのをじっと待つ
+        logging.info("Waiting for authentication to complete...")
+        for i in range(10): # 最大10回（100秒間）確認
             time.sleep(10)
-            if "id.moneyforward.com" not in driver.current_url:
+            current_url = driver.current_url
+            logging.info(f"Current URL: {current_url}")
+            if "id.moneyforward.com" not in current_url:
+                logging.info("Successfully left the ID page!")
                 break
-            # もしログイン画面に留まっていたら、もう一度ボタンを押してみる
+            # まだログイン画面なら、念のためもう一度送信ボタンをJavaScriptで叩く
             try:
                 submit_btn = driver.find_element(By.XPATH, "//button[@type='submit']")
                 driver.execute_script("arguments[0].click();", submit_btn)
+                logging.info("Re-clicked login button...")
             except:
                 pass
 
-        logging.info(f"Final Title: {driver.title}")
-        logging.info(f"Final URL: {driver.current_url}")
-        
-        if "id.moneyforward.com" not in driver.current_url:
-            logging.info("Login Success!")
-        else:
-            logging.warning("Still on ID page. This might cause an error later.")
+        # ログイン後のメインページに移動
+        driver.get("https://moneyforward.com/")
+        time.sleep(10)
 
+        if "id.moneyforward.com" not in driver.current_url:
+            logging.info(f"Login Success! Final Title: {driver.title}")
+        else:
+            logging.warning("Failed to complete login process. Still on ID page.")
     except Exception as e:
         logging.error(f"Login failed: {str(e)}")
         driver.save_screenshot("login_error.png")
@@ -271,16 +270,15 @@ def add_mf_record(dt: datetime, amount: int, store: str, store_info: dict | None
     driver = helium.get_driver()
     wait = WebDriverWait(driver, 30)
 
-    # 入出金ページ(cf)へ移動。IDページに押し戻されたら3回までやり直す
-    for i in range(3):
+  # 入出金ページ(cf)へ移動。
+    for i in range(5): # 回数を5回に増やす
         logging.info(f"Step A: Jumping to CashFlow page (Attempt {i+1})...")
         driver.get("https://moneyforward.com/cf")
-        time.sleep(10)
+        time.sleep(15) # 待ち時間を15秒に延ばす
         if "id.moneyforward.com" not in driver.current_url:
-            logging.info("Successfully arrived at CashFlow page.")
+            logging.info(f"Arrived at: {driver.current_url}")
             break
-        logging.warning("Redirected back to ID page. Retrying jump...")
-
+        logging.warning("Redirected back to ID page. The session might not be ready. Retrying...")
     # 「手入力」ボタンを確実に探してクリック
     logging.info("Step B: Waiting for 'Manual Input' button...")
     try:
