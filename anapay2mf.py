@@ -231,7 +231,6 @@ def login_mf():
         
         # 強制的に家計簿入力ページ（サービスTOP）へ移動する
         logging.info("Navigating to Money Forward ME Top...")
-        driver.get("https://moneyforward.com/") 
         time.sleep(10) # 読み込みを待つ
 
         logging.info(f"Final Title: {driver.title}")
