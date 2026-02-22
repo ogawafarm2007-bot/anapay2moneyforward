@@ -159,47 +159,40 @@ def login_mf():
     options.add_argument("--headless")
     options.add_argument("--width=1920")
     options.add_argument("--height=1080")
-    # 言語設定を日本語(ja)に固定するおまじない
     options.set_preference("intl.accept_languages", "ja-JP, ja")
     
-    helium.start_firefox("https://id.moneyforward.com/sign_in", options=options)
+    # 最初からメールアドレス入力画面を開く
+    helium.start_firefox("https://id.moneyforward.com/sign_in/email", options=options)
     
     try:
-        # 1. メールアドレス入力（英語の "Email" にも対応）
+        # 1. メールアドレス入力
         logging.info("Step 1: Entering email...")
-        email_field = helium.TextField("Email") if helium.TextField("Email").exists() else helium.TextField("マネーフォワードID（メールアドレス）")
+        # 画面に表示されている「メールアドレス」という文字の横の入力欄を探す
+        helium.wait_until(helium.TextField("メールアドレス").exists, timeout_secs=30)
+        helium.write(email, into="メールアドレス")
         
-        helium.wait_until(email_field.exists, timeout_secs=30)
-        helium.write(email, into=email_field)
-        
-        # 「Sign in」または「次へ」ボタンを押す
-        if helium.Button("Sign in").exists():
-            helium.click("Sign in")
-        elif helium.Button("次へ").exists():
-            helium.click("次へ")
-        else:
-            helium.click(helium.S("input[type='submit']"))
+        # オレンジ色の「ログインする」ボタンをクリック
+        logging.info("Clicking login button...")
+        helium.click("ログインする")
 
-        # 2. パスワード入力（英語の "Password" にも対応）
+        # 2. パスワード入力
         logging.info("Step 2: Entering password...")
-        pass_field = helium.TextField("Password") if helium.TextField("Password").exists() else helium.TextField("パスワード")
+        # パスワード欄が出るまで待つ
+        helium.wait_until(helium.TextField("パスワード").exists, timeout_secs=30)
+        helium.write(password, into="パスワード")
         
-        helium.wait_until(pass_field.exists, timeout_secs=30)
-        helium.write(password, into=pass_field)
-        
-        # ログインボタンをクリック
-        if helium.Button("Sign in").exists():
-            helium.click("Sign in")
-        else:
-            helium.click("ログインする")
+        # 再度「ログインする」ボタンをクリック
+        helium.click("ログインする")
 
         # 3. ログイン完了の確認
         logging.info("Step 3: Checking if logged in...")
+        # 「手入力」ボタンが表示されれば成功
         helium.wait_until(helium.Button("手入力").exists, timeout_secs=60)
         logging.info("Login Success!")
 
     except Exception as e:
         logging.error(f"Login failed: {e}")
+        # 失敗した時の証拠写真を撮る
         helium.get_driver().save_screenshot("login_error.png")
         raise e
 def add_mf_record(dt: datetime, amount: int, store: str, store_info: dict | None):
