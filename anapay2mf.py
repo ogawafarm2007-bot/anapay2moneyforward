@@ -148,7 +148,7 @@ def gmail2spredsheet(worksheet):
 
 
 def login_mf():
-    """login moneyforward (Hyper-Robust Button Click version)"""
+    """login moneyforward (Chrome Edition)"""
     email = os.getenv("EMAIL")
     password = os.getenv("PASSWORD")
 
@@ -158,119 +158,83 @@ def login_mf():
     
     logging.info(f"Login to moneyfoward with: {email[:3]}***")
     
-    from selenium.webdriver.firefox.options import Options
+    from selenium.webdriver.chrome.options import Options
     from selenium.webdriver.common.by import By
     from selenium.webdriver.support.ui import WebDriverWait
     from selenium.webdriver.support import expected_conditions as EC
     from selenium.webdriver.common.keys import Keys
     import time
-    
-    options = Options()
-  # ヘッドレス（画面なし）であることを隠すための設定を追加
-    options.add_argument("--headless")
-    options.add_argument("--disable-blink-features=AutomationControlled")
-    options.add_argument("--width=1920")
-    options.add_argument("--height=1080")
-    options.set_preference("intl.accept_languages", "ja-JP, ja")
-    options.set_preference("general.useragent.override", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0")
-    
     import helium
-    helium.start_firefox("https://id.moneyforward.com/", options=options)
+
+    options = Options()
+    options.add_argument("--headless")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--window-size=1920,1080")
+    # 自動操作であることを隠すための重要な設定
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    options.add_experimental_option("useAutomationExtension", False)
+    
+    # Chromeで起動
+    helium.start_chrome("https://id.moneyforward.com/", options=options)
     driver = helium.get_driver()
     
-    try:
-        wait = WebDriverWait(driver, 30) # 待機時間を30秒に延長
+    # 完全に人間らしく見せるために実行中にwebdriverプロパティを書き換える
+    driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
 
-        # --- 紹介ページのログインボタン ---
-        logging.info("Checking for intro page sign-in button...")
-        time.sleep(5)
-        try:
-            # href属性やボタンっぽい要素を広く探す
-            intro_btn = driver.find_element(By.XPATH, "//a[contains(@href, 'sign_in')] | //button[contains(., 'ログイン')] | //a[contains(., 'Sign in')]")
-            intro_btn.click()
-            time.sleep(5)
-        except:
-            logging.info("No intro button found, might be already on login page.")
+    try:
+        wait = WebDriverWait(driver, 30)
 
         # --- 1. メールアドレス入力 ---
         logging.info("Step 1: Entering email...")
-        email_selector = "input[name='mfid_user[email]'], input[type='email']"
-        email_input = wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, email_selector)))
-        email_input.clear()
-        email_input.send_keys(email)
+        time.sleep(3)
+        email_input = wait.until(EC.visibility_of_element_located((By.NAME, "mfid_user[email]")))
+        # 1文字ずつ打ち込む（人間らしさ）
+        for char in email:
+            email_input.send_keys(char)
+            time.sleep(0.1)
         
-        # --- 1.5 「次へ」ボタンを強引に押す ---
-        logging.info("Step 1.5: Clicking Next button (Hyper-Robust)...")
-        time.sleep(2)
-        try:
-            # XPATHで「type=submit」を持つ要素、または特定のクラス、またはボタン要素を全て試す
-            submit_xpath = "//button[@type='submit'] | //input[@type='submit'] | //form//button | //button[contains(., 'ログイン')] | //button[contains(., 'Next')]"
-            submit_btn = driver.find_element(By.XPATH, submit_xpath)
-            # JavaScriptを使って強制的にクリック（要素が隠れていても無視して押せる）
-            driver.execute_script("arguments[0].click();", submit_btn)
-        except Exception as e:
-            logging.warning(f"Button click failed, trying Enter key: {e}")
-            email_input.send_keys(Keys.ENTER)
+        # --- 1.5 次へ ---
+        logging.info("Step 1.5: Clicking Next...")
+        submit_btn = driver.find_element(By.XPATH, "//button[@type='submit']")
+        driver.execute_script("arguments[0].click();", submit_btn)
         
         # --- 2. パスワード入力 ---
         logging.info("Step 2: Entering password...")
         time.sleep(5)
-        pass_selector = "input[name='mfid_user[password]'], input[type='password']"
-        pass_input = wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, pass_selector)))
-        pass_input.send_keys(password)
+        pass_input = wait.until(EC.visibility_of_element_located((By.NAME, "mfid_user[password]")))
+        for char in password:
+            pass_input.send_keys(char)
+            time.sleep(0.1)
         
-# options.add_argument("--headless")  <-- これをコメントアウトして試す価値あり
-# --- 2.5 ログイン完了ボタンをクリック ---
-        logging.info("Step 2.5: Forcing final Login button click...")
-        time.sleep(3)
-        try:
-            # 「ログイン」という名前のボタンを直接クリック（Heliumの機能を利用）
-            if helium.Button("ログイン").exists():
-                helium.click("ログイン")
-            else:
-                # ボタン名が違う場合（Nextなど）に備えてXPATHで物理クリック
-                submit_btn = driver.find_element(By.XPATH, "//button[@type='submit'] | //input[@type='submit']")
-                submit_btn.click()
-            logging.info("Submit button clicked physically.")
-        except Exception as e:
-            logging.warning(f"Physical click failed: {e}")
-            pass_input.send_keys(Keys.ENTER) # 最後の手段        
-# --- 3. ログイン成功確認 ---
-        logging.info("Step 3: Verifying login...")
+        # --- 2.5 ログイン実行 ---
+        logging.info("Step 2.5: Clicking Login...")
+        time.sleep(2)
+        submit_btn = driver.find_element(By.XPATH, "//button[@type='submit']")
+        helium.click(submit_btn)
         
-        # ログインボタンを押した後、URLが「id.moneyforward.com」から切り替わるのを最大100秒粘る
-        logging.info("Waiting for authentication to complete...")
+        # --- 3. ログイン完了待ち ---
+        logging.info("Step 3: Waiting for authentication...")
         for i in range(10):
             time.sleep(10)
-            current_url = driver.current_url
-            logging.info(f"Checking URL... ({i+1}/10): {current_url}")
-            
-            if "id.moneyforward.com" not in current_url:
-                logging.info("Successfully left the ID page!")
+            logging.info(f"Checking URL... ({i+1}/10): {driver.current_url}")
+            if "id.moneyforward.com" not in driver.current_url:
+                logging.info("Successfully left ID page!")
                 break
-            
-            # まだIDページなら、念のためもう一度送信ボタンをJavaScriptで叩く
+            # 念押しクリック
             try:
-                submit_btn = driver.find_element(By.XPATH, "//button[@type='submit']")
                 driver.execute_script("arguments[0].click();", submit_btn)
-                logging.info("Re-clicked login button to push process...")
             except:
                 pass
 
-# ログイン後のメインページに移動し、さらに待つ
         driver.get("https://moneyforward.com/")
         time.sleep(10)
-
-        if "id.moneyforward.com" not in driver.current_url:
-            logging.info(f"Login Success! Final Title: {driver.title}")
-        else:
-            logging.warning("Failed to complete login process. Still on ID page.")
 
     except Exception as e:
         logging.error(f"Login failed: {str(e)}")
         driver.save_screenshot("login_error.png")
         raise e
-        
 def add_mf_record(dt: datetime, amount: int, store: str, store_info: dict | None):
     """
     add record to moneyfoward
