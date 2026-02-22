@@ -225,21 +225,20 @@ def login_mf():
         except:
             pass_input.send_keys(Keys.ENTER)
         
-        # --- 3. ログイン成功確認 ---
+# --- 3. ログイン成功確認 ---
         logging.info("Step 3: Verifying login...")
-        time.sleep(15) # ログイン処理は重いので長めに待つ
+        time.sleep(5)
         
-        if "404" in driver.title:
-            logging.error("Redirected to 404! Trying to jump to home page...")
-            driver.get("https://moneyforward.com/")
-            time.sleep(10)
+        # 強制的に家計簿入力ページ（サービスTOP）へ移動する
+        logging.info("Navigating to Money Forward ME Top...")
+        driver.get("https://moneyforward.com/") 
+        time.sleep(10) # 読み込みを待つ
 
         logging.info(f"Final Title: {driver.title}")
         if any(kw in driver.title for kw in ["マネーフォワード", "家計簿", "Dashboard", "ホーム"]):
             logging.info("Login Success!")
         else:
-            logging.warning(f"Current URL: {driver.current_url}")
-            driver.save_screenshot("login_final_check.png")
+            logging.warning(f"Title might be unexpected: {driver.title}")
 
     except Exception as e:
         logging.error(f"Login failed: {str(e)}")
