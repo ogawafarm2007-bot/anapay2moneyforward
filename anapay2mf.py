@@ -228,24 +228,26 @@ def login_mf():
 # --- 3. ログイン成功確認 ---
         logging.info("Step 3: Verifying login...")
         
-        # ログインボタンを押した後、URLが「id.moneyforward.com」から切り替わるのをじっと待つ
+        # ログインボタンを押した後、URLが「id.moneyforward.com」から切り替わるのを最大100秒粘る
         logging.info("Waiting for authentication to complete...")
-        for i in range(10): # 最大10回（100秒間）確認
+        for i in range(10):
             time.sleep(10)
             current_url = driver.current_url
-            logging.info(f"Current URL: {current_url}")
+            logging.info(f"Checking URL... ({i+1}/10): {current_url}")
+            
             if "id.moneyforward.com" not in current_url:
                 logging.info("Successfully left the ID page!")
                 break
-            # まだログイン画面なら、念のためもう一度送信ボタンをJavaScriptで叩く
+            
+            # まだIDページなら、念のためもう一度送信ボタンをJavaScriptで叩く
             try:
                 submit_btn = driver.find_element(By.XPATH, "//button[@type='submit']")
                 driver.execute_script("arguments[0].click();", submit_btn)
-                logging.info("Re-clicked login button...")
+                logging.info("Re-clicked login button to push process...")
             except:
                 pass
 
-        # ログイン後のメインページに移動
+        # ログイン後のメインページに移動し、さらに待つ
         driver.get("https://moneyforward.com/")
         time.sleep(10)
 
@@ -253,6 +255,7 @@ def login_mf():
             logging.info(f"Login Success! Final Title: {driver.title}")
         else:
             logging.warning("Failed to complete login process. Still on ID page.")
+
     except Exception as e:
         logging.error(f"Login failed: {str(e)}")
         driver.save_screenshot("login_error.png")
@@ -270,17 +273,20 @@ def add_mf_record(dt: datetime, amount: int, store: str, store_info: dict | None
     driver = helium.get_driver()
     wait = WebDriverWait(driver, 30)
 
-  # 入出金ページ(cf)へ移動。
-    for i in range(5): # 回数を5回に増やす
+    # 入出金ページ(cf)へ移動。IDページに押し戻されたら5回までやり直す
+    for i in range(5):
         logging.info(f"Step A: Jumping to CashFlow page (Attempt {i+1})...")
         driver.get("https://moneyforward.com/cf")
         time.sleep(15) # 待ち時間を15秒に延ばす
+        
         if "id.moneyforward.com" not in driver.current_url:
-            logging.info(f"Arrived at: {driver.current_url}")
+            logging.info(f"Successfully arrived at CashFlow page: {driver.current_url}")
             break
         logging.warning("Redirected back to ID page. The session might not be ready. Retrying...")
+
     # 「手入力」ボタンを確実に探してクリック
     logging.info("Step B: Waiting for 'Manual Input' button...")
+    # ...（ここから下は前のコードと同じでOKです）
     try:
         input_btn_xpath = "//*[contains(text(), '手入力')] | //a[contains(., '手入力')] | //button[contains(., '手入力')]"
         input_btn = wait.until(EC.element_to_be_clickable((By.XPATH, input_btn_xpath)))
