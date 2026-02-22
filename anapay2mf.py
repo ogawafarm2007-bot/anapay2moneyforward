@@ -156,7 +156,7 @@ def login_mf():
         logging.error("!!! EMAIL IS EMPTY !!! Check GitHub Secrets.")
         raise ValueError("EMAIL secret is not set")
     
-    logging.info(f"Login to moneyfoward with email starting with: {email[:3]}***")
+    logging.info(f"Login to moneyfoward with: {email[:3]}***")
     
     from selenium.webdriver.firefox.options import Options
     from selenium.webdriver.common.by import By
@@ -170,44 +170,81 @@ def login_mf():
     options.add_argument("--height=1080")
     options.set_preference("intl.accept_languages", "ja-JP, ja")
     
-    # ブラウザの起動
     helium.start_firefox("https://id.moneyforward.com/sign_in/email", options=options)
     driver = helium.get_driver()
     
     try:
-        logging.info("Step 1: Waiting for page to load...")
-        time.sleep(3) # 画面が描画されるまで3秒待機
+        wait = WebDriverWait(driver, 20)
+        time.sleep(5) # ページが落ち着くまで少し長めに待つ
+
+        # 1. メールアドレス入力（あらゆる可能性を探す）
+        logging.info("Step 1: Finding email field...")
+        # 候補：name属性、type属性、または「最初のinputタグ」
+        selectors = [
+            (By.NAME, "mfid_user[email]"),
+            (By.CSS_SELECTOR, "input[type='email']"),
+            (By.CSS_SELECTOR, "input[name*='email']"),
+            (By.TAG_NAME, "input") # 最終手段：画面上の最初の入力欄
+        ]
         
-        logging.info("Step 1: Entering email with Selenium...")
-        wait = WebDriverWait(driver, 30)
-        
-        # HTMLの構造から直接入力欄を狙い撃つ
-        email_input = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='email'], input[name*='email']")))
+        email_input = None
+        for by, sel in selectors:
+            try:
+                email_input = driver.find_element(by, sel)
+                if email_input.is_displayed():
+                    logging.info(f"Found email field by {by}={sel}")
+                    break
+            except:
+                continue
+
+        if not email_input:
+            raise Exception("Could not find email input field anyway.")
+
         email_input.clear()
         email_input.send_keys(email)
         
-        logging.info("Clicking login button...")
-        submit_btn = driver.find_element(By.CSS_SELECTOR, "input[type='submit'], button[type='submit']")
+        # ログインボタンクリック
+        submit_btn = driver.find_element(By.CSS_SELECTOR, "button[type='submit'], input[type='submit'], .submit_button")
         submit_btn.click()
         
-        logging.info("Step 2: Entering password with Selenium...")
-        time.sleep(3)
+        # 2. パスワード入力
+        logging.info("Step 2: Finding password field...")
+        time.sleep(5)
         
-        pass_input = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='password'], input[name*='password']")))
-        pass_input.clear()
+        pass_selectors = [
+            (By.NAME, "mfid_user[password]"),
+            (By.CSS_SELECTOR, "input[type='password']"),
+            (By.TAG_NAME, "input") # 遷移後はパスワード欄が最初に来ることが多い
+        ]
+        
+        pass_input = None
+        for by, sel in pass_selectors:
+            try:
+                # パスワード欄は通常、画面に存在する中で「空のもの」か「2番目以降」
+                elements = driver.find_elements(by, sel)
+                for el in elements:
+                    if el.is_displayed() and el.get_attribute("type") == "password":
+                        pass_input = el
+                        break
+                if pass_input: break
+            except:
+                continue
+
         pass_input.send_keys(password)
         
-        logging.info("Clicking login button again...")
-        submit_btn2 = driver.find_element(By.CSS_SELECTOR, "input[type='submit'], button[type='submit']")
-        submit_btn2.click()
+        # 再度ログインボタン
+        driver.find_element(By.CSS_SELECTOR, "button[type='submit'], input[type='submit']").click()
         
-        logging.info("Step 3: Checking if logged in...")
+        # 3. 成功確認
+        logging.info("Step 3: Checking success...")
         wait.until(EC.presence_of_element_located((By.XPATH, "//*[contains(text(), '手入力')]")))
         logging.info("Login Success!")
 
     except Exception as e:
         logging.error(f"Login failed: {e}")
         driver.save_screenshot("login_error.png")
+        # ページのHTML構造をログに出力（これが最後のデバッグ武器になります）
+        logging.error("Page structure snippet: " + driver.page_source[:500])
         raise e
 
 
