@@ -16,6 +16,11 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Install Firefox and Geckodriver
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y firefox geckodriver
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -30,4 +35,5 @@ jobs:
         env:
           EMAIL: ${{ secrets.EMAIL }}
           PASSWORD: ${{ secrets.PASSWORD }}
+          HEADLESS: "true"
         run: python anapay2mf.py
