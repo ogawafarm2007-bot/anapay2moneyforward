@@ -252,28 +252,33 @@ def add_mf_record(dt: datetime, amount: int, store: str, store_info: dict | None
     from selenium.webdriver.common.by import By
     from selenium.webdriver.support.ui import WebDriverWait
     from selenium.webdriver.support import expected_conditions as EC
-    
+    import time
+
     driver = helium.get_driver()
     wait = WebDriverWait(driver, 30)
 
-    # 【超重要】「手入力」ボタンがある入出金ページに直接移動する
+    # 【★最重要★】手入力ボタンがある「入出金ページ」に直接ジャンプする
     logging.info("Directly jumping to CashFlow page...")
-    driver.get("https://moneyforward.com/cf") 
-    time.sleep(10) # ページが完全に読み込まれるまで待機
+    driver.get("https://moneyforward.com/cf")
+    time.sleep(10) # ページが完全に開くのを待つ
 
     # 1. 「手入力」ボタンが表示されるのを待ってクリック
     logging.info("Waiting for 'Manual Input' button...")
     input_btn_xpath = "//*[contains(text(), '手入力')]"
     
-    # タイムアウト対策：ボタンが見つかるまで粘る
-    input_btn = wait.until(EC.element_to_be_clickable((By.XPATH, input_btn_xpath)))
-    driver.execute_script("arguments[0].click();", input_btn)
+    try:
+        input_btn = wait.until(EC.element_to_be_clickable((By.XPATH, input_btn_xpath)))
+        driver.execute_script("arguments[0].click();", input_btn)
+    except Exception as e:
+        logging.error(f"Failed to find or click Manual Input button: {e}")
+        driver.save_screenshot("cf_page_error.png")
+        raise e
     
-    time.sleep(3) # フォームがふわっと開くのを待つ
+    time.sleep(3)
 
-    # --- ここから下は元のコード（helium.write(...) から） ---
+    # --- ここから下は元のコード（helium.write(...) から）を続けてください ---
     helium.write(f"{dt:%Y/%m/%d}", into="日付")
-    # ...（以下略）
+    # ... 以下省略 ...
 
     helium.write(amount, into="支出金額")
     asset = helium.find_all(helium.ComboBox())[0]
