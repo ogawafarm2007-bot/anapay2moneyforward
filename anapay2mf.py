@@ -30,7 +30,7 @@ SCOPES = [
 SHEET_ID = "1fVCe4-zFnQVv0rRtJPt8TO9DsL3maFxjohYsAvZHclc"
 SHEET_NAME = "ANAPay"
 
-MF_URL = "https://ssnb.x.moneyforward.com/cf"
+MF_URL = "https://moneyforward.com/cf"
 
 format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 logging.basicConfig(format=format, level=logging.INFO)
