@@ -186,15 +186,33 @@ def login_mf():
     try:
         wait = WebDriverWait(driver, 30)
 
+# --- 0. ログインページへ確実に誘導 ---
+        logging.info("Step 0: Checking if we are on the intro page...")
+        time.sleep(5)
+        try:
+            # 「ログイン」という名前のリンクやボタンがあればクリック
+            login_link_xpath = "//a[contains(text(), 'ログイン')] | //a[contains(@href, 'sign_in')]"
+            if driver.find_elements(By.XPATH, login_link_xpath):
+                logging.info("Intro page detected. Clicking login link...")
+                driver.execute_script("arguments[0].click();", driver.find_element(By.XPATH, login_link_xpath))
+                time.sleep(5)
+        except:
+            pass
+
         # --- 1. メールアドレス入力 ---
         logging.info("Step 1: Entering email...")
-        time.sleep(3)
-        email_input = wait.until(EC.visibility_of_element_located((By.NAME, "mfid_user[email]")))
-        # 1文字ずつ打ち込む（人間らしさ）
+        # セレクターをより汎用的なもの（ID or Name or Type）に変更
+        email_selector = "input[name='mfid_user[email]'], input[type='email'], #mfid_user_email"
+        email_input = wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, email_selector)))
+        
+        # 入力前に一度クリックしてフォーカスを当てる
+        email_input.click()
+        time.sleep(1)
+        
+        # 1文字ずつ打ち込む
         for char in email:
             email_input.send_keys(char)
             time.sleep(0.1)
-        
         # --- 1.5 次へ ---
         logging.info("Step 1.5: Clicking Next...")
         submit_btn = driver.find_element(By.XPATH, "//button[@type='submit']")
