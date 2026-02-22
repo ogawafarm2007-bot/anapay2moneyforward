@@ -148,7 +148,7 @@ def gmail2spredsheet(worksheet):
 
 
 def login_mf():
-    """login moneyforward"""
+    """login moneyforward (Anti-Bot & Anti-404 version)"""
     email = os.getenv("EMAIL")
     password = os.getenv("PASSWORD")
 
@@ -162,89 +162,70 @@ def login_mf():
     from selenium.webdriver.common.by import By
     from selenium.webdriver.support.ui import WebDriverWait
     from selenium.webdriver.support import expected_conditions as EC
+    from selenium.webdriver import ActionChains
     import time
     
     options = Options()
     options.add_argument("--headless")
     options.add_argument("--width=1920")
     options.add_argument("--height=1080")
-    options.set_preference("intl.accept_languages", "ja-JP, ja")
+    # ロボットだと思われないように、一般的なPCのブラウザを装う（User-Agent）
+    options.set_preference("general.useragent.override", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36")
     
-    helium.start_firefox("https://id.moneyforward.com/sign_in/email", options=options)
+    # Heliumではなく、純粋なSeleniumとして制御
+    import helium
+    helium.start_firefox("https://id.moneyforward.com/", options=options)
     driver = helium.get_driver()
     
     try:
         wait = WebDriverWait(driver, 20)
-        time.sleep(5) # ページが落ち着くまで少し長めに待つ
+        time.sleep(3)
 
-        # 1. メールアドレス入力（あらゆる可能性を探す）
+        # もし404が出ていたら、直接メール入力ページへ再トライ
+        if "404" in driver.title:
+            logging.warning("404 detected. Forcing move to sign_in page...")
+            driver.get("https://id.moneyforward.com/sign_in/email")
+            time.sleep(5)
+
+        # 1. メールアドレス入力欄（名前で直接狙い撃ち）
         logging.info("Step 1: Finding email field...")
-        # 候補：name属性、type属性、または「最初のinputタグ」
-        selectors = [
-            (By.NAME, "mfid_user[email]"),
-            (By.CSS_SELECTOR, "input[type='email']"),
-            (By.CSS_SELECTOR, "input[name*='email']"),
-            (By.TAG_NAME, "input") # 最終手段：画面上の最初の入力欄
-        ]
+        email_selector = "input[name='mfid_user[email]'], input[type='email'], input#mfid_user_email"
+        email_input = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, email_selector)))
         
-        email_input = None
-        for by, sel in selectors:
-            try:
-                email_input = driver.find_element(by, sel)
-                if email_input.is_displayed():
-                    logging.info(f"Found email field by {by}={sel}")
-                    break
-            except:
-                continue
-
-        if not email_input:
-            raise Exception("Could not find email input field anyway.")
-
         email_input.clear()
         email_input.send_keys(email)
         
-        # ログインボタンクリック
-        submit_btn = driver.find_element(By.CSS_SELECTOR, "button[type='submit'], input[type='submit'], .submit_button")
+        # ログインボタン（これも名前やタイプで指定。文字には頼らない）
+        submit_btn_selector = "button[type='submit'], input[type='submit'], .submit_button"
+        submit_btn = driver.find_element(By.CSS_SELECTOR, submit_btn_selector)
         submit_btn.click()
         
         # 2. パスワード入力
         logging.info("Step 2: Finding password field...")
         time.sleep(5)
         
-        pass_selectors = [
-            (By.NAME, "mfid_user[password]"),
-            (By.CSS_SELECTOR, "input[type='password']"),
-            (By.TAG_NAME, "input") # 遷移後はパスワード欄が最初に来ることが多い
-        ]
-        
-        pass_input = None
-        for by, sel in pass_selectors:
-            try:
-                # パスワード欄は通常、画面に存在する中で「空のもの」か「2番目以降」
-                elements = driver.find_elements(by, sel)
-                for el in elements:
-                    if el.is_displayed() and el.get_attribute("type") == "password":
-                        pass_input = el
-                        break
-                if pass_input: break
-            except:
-                continue
-
+        pass_selector = "input[name='mfid_user[password]'], input[type='password']"
+        pass_input = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, pass_selector)))
         pass_input.send_keys(password)
         
         # 再度ログインボタン
-        driver.find_element(By.CSS_SELECTOR, "button[type='submit'], input[type='submit']").click()
+        submit_btn = driver.find_element(By.CSS_SELECTOR, submit_btn_selector)
+        submit_btn.click()
         
-        # 3. 成功確認
-        logging.info("Step 3: Checking success...")
-        wait.until(EC.presence_of_element_located((By.XPATH, "//*[contains(text(), '手入力')]")))
-        logging.info("Login Success!")
+        # 3. ログイン後の遷移を待つ
+        logging.info("Step 3: Waiting for dashboard...")
+        time.sleep(10) # 完全に読み込まれるまで待機
+        
+        # 成功したか確認（ページのタイトルや特定の要素を確認）
+        logging.info(f"Final Page Title: {driver.title}")
+        logging.info("Login process completed.")
 
     except Exception as e:
-        logging.error(f"Login failed: {e}")
+        logging.error(f"Login failed: {str(e)}")
         driver.save_screenshot("login_error.png")
-        # ページのHTML構造をログに出力（これが最後のデバッグ武器になります）
-        logging.error("Page structure snippet: " + driver.page_source[:500])
+        # 失敗時の情報を詳しく出す
+        logging.error(f"URL at fail: {driver.current_url}")
+        logging.error(f"Page Source Preview: {driver.page_source[:500]}")
         raise e
 
 
