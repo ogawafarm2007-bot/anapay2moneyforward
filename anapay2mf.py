@@ -229,8 +229,9 @@ def login_mf():
         logging.info("Step 3: Verifying login...")
         time.sleep(5)
         
-        # 強制的に家計簿入力ページ（サービスTOP）へ移動する
+        # 【重要！】実際にURLに移動する命令を追加
         logging.info("Navigating to Money Forward ME Top...")
+        driver.get("https://moneyforward.com/") 
         time.sleep(10) # 読み込みを待つ
 
         logging.info(f"Final Title: {driver.title}")
@@ -256,35 +257,35 @@ def add_mf_record(dt: datetime, amount: int, store: str, store_info: dict | None
     driver = helium.get_driver()
     wait = WebDriverWait(driver, 30)
 
-    # 【1】まず、絶対に入出金ページ(cf)へ移動させる
-    logging.info("Step A: Navigating directly to CashFlow page...")
+    # 【1】何はともあれ、入出金ページ(cf)へ直接ワープする
+    logging.info("Step A: Jumping to CashFlow page...")
     driver.get("https://moneyforward.com/cf")
     
-    # 【2】移動が完了するのをしっかり待つ
+    # 【2】読み込みをしっかり待つ（ここでページが切り替わります）
     time.sleep(10) 
-    logging.info(f"Current URL after jump: {driver.current_url}")
+    logging.info(f"Current URL: {driver.current_url}")
 
-    # 【3】「手入力」ボタンを、文字ではなく「属性」で探し出す（より確実）
+    # 【3】「手入力」ボタンを、テキストではなく「属性」で探し出す
     logging.info("Step B: Waiting for 'Manual Input' button...")
     try:
-        # XPATHを強化：テキスト「手入力」を含むか、特定のクラスを持つボタン
-        input_btn_xpath = "//a[contains(., '手入力')] | //button[contains(., '手入力')] | //*[text()='手入力']"
+        # XPATHを最強の条件に設定
+        input_btn_xpath = "//*[contains(text(), '手入力')] | //a[contains(., '手入力')] | //button[contains(., '手入力')]"
         input_btn = wait.until(EC.element_to_be_clickable((By.XPATH, input_btn_xpath)))
         
-        # 普通のクリックではなく、JavaScriptで背後から叩く（最強の方法）
+        # JavaScriptで物理的にクリックを発火
         driver.execute_script("arguments[0].click();", input_btn)
         logging.info("Step C: Manual Input button clicked.")
     except Exception as e:
-        logging.error(f"Failed to find button. Current URL: {driver.current_url}")
-        driver.save_screenshot("cf_page_error.png")
+        logging.error("Failed to click Manual Input button. Screenshot saved.")
+        driver.save_screenshot("manual_input_fail.png")
         raise e
     
-    # 【4】入力フォームが完全に開くまで待つ
+    # 【4】入力フォームが開くのを待つ
     time.sleep(5)
 
     # --- ここから下は元の helium.write(...) 処理 ---
     helium.write(f"{dt:%Y/%m/%d}", into="日付")
-    # ... 以下省略 ...
+    # ...（以下省略）
 
     helium.write(amount, into="支出金額")
     asset = helium.find_all(helium.ComboBox())[0]
