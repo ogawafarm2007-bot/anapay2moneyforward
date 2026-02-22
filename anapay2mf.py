@@ -249,24 +249,39 @@ def add_mf_record(dt: datetime, amount: int, store: str, store_info: dict | None
     """
     add record to moneyfoward
     """
-    # --- ここから修正（「手入力」ボタンを確実に押すための処理） ---
     from selenium.webdriver.common.by import By
     from selenium.webdriver.support.ui import WebDriverWait
     from selenium.webdriver.support import expected_conditions as EC
     
     driver = helium.get_driver()
     wait = WebDriverWait(driver, 30)
-    
+
+    # 【追加】もし「サービスへ」や「家計簿をつける」ボタンがあれば押して中に入る
+    logging.info("Checking if we need to enter the service dashboard...")
+    try:
+        enter_btn_xpath = "//a[contains(., 'サービスへ')] | //a[contains(., '家計簿をつける')] | //a[contains(@href, '/users/sign_in')]"
+        enter_btns = driver.find_elements(By.XPATH, enter_btn_xpath)
+        if enter_btns:
+            driver.execute_script("arguments[0].click();", enter_btns[0])
+            time.sleep(5)
+    except:
+        pass
+
+    # もしダッシュボード（cf）に自動で飛ばない場合は、直接URLを叩いて移動する
+    if "/cf" not in driver.current_url:
+        logging.info("Directly jumping to CashFlow page...")
+        driver.get("https://moneyforward.com/cf")
+        time.sleep(10)
+
+    # 1. 「手入力」ボタンが表示されるのを待ってクリック
     logging.info("Waiting for 'Manual Input' button...")
-    # 日本語でも英語でも「手入力」という文字を含むボタンを探してクリック
     input_btn_xpath = "//*[contains(text(), '手入力')]"
     input_btn = wait.until(EC.element_to_be_clickable((By.XPATH, input_btn_xpath)))
     driver.execute_script("arguments[0].click();", input_btn)
     
-    time.sleep(2) # フォームが開くのを少し待つ
-    # --- ここまで修正 ---
+    time.sleep(2)
 
-    # 以下は元のコードのまま（日付の入力から再開）
+    # --- 以下、元のコード（helium.write(...) から）を続けてください ---
     helium.write(f"{dt:%Y/%m/%d}", into="日付")
     helium.click("日付")
 
