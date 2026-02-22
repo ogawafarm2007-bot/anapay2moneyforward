@@ -187,20 +187,30 @@ def login_mf():
         wait = WebDriverWait(driver, 30)
 
 # --- 0. ログインページへ確実に誘導 ---
-        logging.info("Step 0: Checking if we are on the intro page...")
+        logging.info("Step 0: Handling English/Intro page...")
         time.sleep(5)
         try:
-            # 「ログイン」という名前のリンクやボタンがあればクリック
-            login_link_xpath = "//a[contains(text(), 'ログイン')] | //a[contains(@href, 'sign_in')]"
-            if driver.find_elements(By.XPATH, login_link_xpath):
-                logging.info("Intro page detected. Clicking login link...")
-                driver.execute_script("arguments[0].click();", driver.find_element(By.XPATH, login_link_xpath))
-                time.sleep(5)
-        except:
-            pass
+            # スクリーンショットに写っている白い「Sign in」ボタンを探す
+            # テキストが "Sign in" または XPATH で "/sign_in" を含む要素を狙い撃ちします
+            sign_in_selectors = [
+                "//a[contains(text(), 'Sign in')]",
+                "//a[contains(@class, 'button') and contains(text(), 'Sign in')]",
+                "//a[contains(@href, 'sign_in')]"
+            ]
+            
+            for selector in sign_in_selectors:
+                elements = driver.find_elements(By.XPATH, selector)
+                if elements:
+                    logging.info(f"Sign in button found! Clicking: {selector}")
+                    driver.execute_script("arguments[0].click();", elements[0])
+                    time.sleep(5)
+                    break
+        except Exception as e:
+            logging.warning(f"Intro page skip failed, but continuing: {e}")
 
-# --- 1. メールアドレス入力 ---
+        # --- 1. メールアドレス入力 ---
         logging.info("Step 1: Entering email...")
+        # (ここから下の Step 1 以降は、前回お伝えした「複数のセレクターで探す」コードのままでOKです)
         
         # 複数の候補（Name, ID, CSS, Type）で、とにかくメール入力欄らしきものを探す
         selectors = [
