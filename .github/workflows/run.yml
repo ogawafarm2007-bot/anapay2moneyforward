@@ -16,17 +16,21 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install Firefox
+      - name: Setup Firefox and Geckodriver
+        uses: browser-actions/setup-firefox@v1
+        with:
+          firefox-version: 'latest'
+
+      - name: Install Geckodriver
         run: |
-          sudo apt-get update
-          sudo apt-get install -y firefox
+          wget https://github.com/mozilla/geckodriver/releases/download/v0.34.0/geckodriver-v0.34.0-linux64.tar.gz
+          tar -xvzf geckodriver-v0.34.0-linux64.tar.gz
+          sudo mv geckodriver /usr/local/bin/
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          # geckodriverを自動でインストールするライブラリを追加
-          pip install webdriver-manager
 
       - name: Create credentials and token files
         run: |
