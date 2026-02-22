@@ -148,7 +148,7 @@ def gmail2spredsheet(worksheet):
 
 
 def login_mf():
-    """login moneyforward (Two-step navigation version)"""
+    """login moneyforward (Persistent Button Click version)"""
     email = os.getenv("EMAIL")
     password = os.getenv("PASSWORD")
 
@@ -162,13 +162,13 @@ def login_mf():
     from selenium.webdriver.common.by import By
     from selenium.webdriver.support.ui import WebDriverWait
     from selenium.webdriver.support import expected_conditions as EC
+    from selenium.common.exceptions import TimeoutException
     import time
     
     options = Options()
     options.add_argument("--headless")
     options.add_argument("--width=1920")
     options.add_argument("--height=1080")
-    # 言語を日本語に固定しつつ、ブラウザのふりをする
     options.set_preference("intl.accept_languages", "ja-JP, ja")
     options.set_preference("general.useragent.override", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0")
     
@@ -180,29 +180,21 @@ def login_mf():
         wait = WebDriverWait(driver, 20)
         time.sleep(5)
 
-        # 【追加】紹介ページにいる場合、ログイン画面へ遷移するボタンを押す
-        logging.info("Checking if we need to click 'Sign in' button...")
+        # 紹介ページのログインボタン
         try:
-            # ログインボタン（リンク）を探す。hrefにsign_inが含まれるものを優先
             signin_btn_selectors = [
                 (By.XPATH, "//a[contains(@href, '/sign_in/email')]"),
                 (By.XPATH, "//a[contains(text(), 'ログイン') or contains(text(), 'Sign in')]"),
-                (By.CSS_SELECTOR, "a.button")
+                (By.CSS_SELECTOR, "a.button, .p-button--primary")
             ]
-            
-            target_btn = None
             for by, sel in signin_btn_selectors:
                 elements = driver.find_elements(by, sel)
                 if elements and elements[0].is_displayed():
-                    target_btn = elements[0]
+                    elements[0].click()
                     break
-            
-            if target_btn:
-                logging.info("Found Sign-in button. Clicking it...")
-                target_btn.click()
-                time.sleep(5)
-        except Exception as e:
-            logging.info(f"No initial sign-in button needed or error: {e}")
+            time.sleep(5)
+        except:
+            pass
 
         # 1. メールアドレス入力
         logging.info("Step 1: Entering email...")
@@ -211,35 +203,45 @@ def login_mf():
         email_input.clear()
         email_input.send_keys(email)
         
-        # 次へボタン
-        submit_selector = "button[type='submit'], input[type='submit']"
-        driver.find_element(By.CSS_SELECTOR, submit_selector).click()
+        # 【強化】「次へ」ボタンを複数の候補から探し、クリック可能になるまで待つ
+        logging.info("Step 1.5: Clicking Next button...")
+        submit_selector = "button[type='submit'], input[type='submit'], .submitBtn, button.p-button--primary"
+        submit_btn = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, submit_selector)))
+        # たまにJavaScriptの処理でクリックを弾かれるので、少し待ってから押す
+        time.sleep(1)
+        submit_btn.click()
         
         # 2. パスワード入力
         logging.info("Step 2: Entering password...")
-        time.sleep(5)
+        # パスワード画面に切り替わるのをしっかり待つ
         pass_selector = "input[name='mfid_user[password]'], input[type='password']"
         pass_input = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, pass_selector)))
         pass_input.send_keys(password)
         
         # ログイン完了ボタン
-        driver.find_element(By.CSS_SELECTOR, submit_selector).click()
+        submit_btn = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, submit_selector)))
+        time.sleep(1)
+        submit_btn.click()
         
         # 3. ログイン成功確認
         logging.info("Step 3: Verifying login...")
         time.sleep(10)
         logging.info(f"Final Title: {driver.title}")
-        if "マネーフォワード" in driver.title or "家計簿" in driver.title or "Dashboard" in driver.title:
+        if any(kw in driver.title for kw in ["マネーフォワード", "家計簿", "Dashboard", "ホーム"]):
             logging.info("Login Success!")
         else:
-            logging.warning("Login might have failed or still on ID page.")
+            # ログイン後の画面が404などでないか確認
+            if "404" in driver.title:
+                logging.error("Final page was 404. MF might be blocking final redirect.")
+            else:
+                logging.warning(f"Login state unclear. Title: {driver.title}")
 
     except Exception as e:
         logging.error(f"Login failed: {str(e)}")
         driver.save_screenshot("login_error.png")
         logging.error(f"Current URL: {driver.current_url}")
         raise e
-
+        
 def add_mf_record(dt: datetime, amount: int, store: str, store_info: dict | None):
     """
     add record to moneyfoward
