@@ -148,7 +148,7 @@ def gmail2spredsheet(worksheet):
 
 
 def login_mf():
-    """login moneyforward (Persistent Button Click version)"""
+    """login moneyforward (Hyper-Robust Button Click version)"""
     email = os.getenv("EMAIL")
     password = os.getenv("PASSWORD")
 
@@ -162,7 +162,7 @@ def login_mf():
     from selenium.webdriver.common.by import By
     from selenium.webdriver.support.ui import WebDriverWait
     from selenium.webdriver.support import expected_conditions as EC
-    from selenium.common.exceptions import TimeoutException
+    from selenium.webdriver.common.keys import Keys
     import time
     
     options = Options()
@@ -177,69 +177,73 @@ def login_mf():
     driver = helium.get_driver()
     
     try:
-        wait = WebDriverWait(driver, 20)
-        time.sleep(5)
+        wait = WebDriverWait(driver, 30) # 待機時間を30秒に延長
 
-        # 紹介ページのログインボタン
+        # --- 紹介ページのログインボタン ---
+        logging.info("Checking for intro page sign-in button...")
+        time.sleep(5)
         try:
-            signin_btn_selectors = [
-                (By.XPATH, "//a[contains(@href, '/sign_in/email')]"),
-                (By.XPATH, "//a[contains(text(), 'ログイン') or contains(text(), 'Sign in')]"),
-                (By.CSS_SELECTOR, "a.button, .p-button--primary")
-            ]
-            for by, sel in signin_btn_selectors:
-                elements = driver.find_elements(by, sel)
-                if elements and elements[0].is_displayed():
-                    elements[0].click()
-                    break
+            # href属性やボタンっぽい要素を広く探す
+            intro_btn = driver.find_element(By.XPATH, "//a[contains(@href, 'sign_in')] | //button[contains(., 'ログイン')] | //a[contains(., 'Sign in')]")
+            intro_btn.click()
             time.sleep(5)
         except:
-            pass
+            logging.info("No intro button found, might be already on login page.")
 
-        # 1. メールアドレス入力
+        # --- 1. メールアドレス入力 ---
         logging.info("Step 1: Entering email...")
         email_selector = "input[name='mfid_user[email]'], input[type='email']"
-        email_input = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, email_selector)))
+        email_input = wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, email_selector)))
         email_input.clear()
         email_input.send_keys(email)
         
-        # 【強化】「次へ」ボタンを複数の候補から探し、クリック可能になるまで待つ
-        logging.info("Step 1.5: Clicking Next button...")
-        submit_selector = "button[type='submit'], input[type='submit'], .submitBtn, button.p-button--primary"
-        submit_btn = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, submit_selector)))
-        # たまにJavaScriptの処理でクリックを弾かれるので、少し待ってから押す
-        time.sleep(1)
-        submit_btn.click()
+        # --- 1.5 「次へ」ボタンを強引に押す ---
+        logging.info("Step 1.5: Clicking Next button (Hyper-Robust)...")
+        time.sleep(2)
+        try:
+            # XPATHで「type=submit」を持つ要素、または特定のクラス、またはボタン要素を全て試す
+            submit_xpath = "//button[@type='submit'] | //input[@type='submit'] | //form//button | //button[contains(., 'ログイン')] | //button[contains(., 'Next')]"
+            submit_btn = driver.find_element(By.XPATH, submit_xpath)
+            # JavaScriptを使って強制的にクリック（要素が隠れていても無視して押せる）
+            driver.execute_script("arguments[0].click();", submit_btn)
+        except Exception as e:
+            logging.warning(f"Button click failed, trying Enter key: {e}")
+            email_input.send_keys(Keys.ENTER)
         
-        # 2. パスワード入力
+        # --- 2. パスワード入力 ---
         logging.info("Step 2: Entering password...")
-        # パスワード画面に切り替わるのをしっかり待つ
+        time.sleep(5)
         pass_selector = "input[name='mfid_user[password]'], input[type='password']"
-        pass_input = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, pass_selector)))
+        pass_input = wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, pass_selector)))
         pass_input.send_keys(password)
         
-        # ログイン完了ボタン
-        submit_btn = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, submit_selector)))
-        time.sleep(1)
-        submit_btn.click()
+        # --- 2.5 ログイン完了ボタンを強引に押す ---
+        logging.info("Step 2.5: Clicking final Login button...")
+        try:
+            submit_btn = driver.find_element(By.XPATH, submit_xpath)
+            driver.execute_script("arguments[0].click();", submit_btn)
+        except:
+            pass_input.send_keys(Keys.ENTER)
         
-        # 3. ログイン成功確認
+        # --- 3. ログイン成功確認 ---
         logging.info("Step 3: Verifying login...")
-        time.sleep(10)
+        time.sleep(15) # ログイン処理は重いので長めに待つ
+        
+        if "404" in driver.title:
+            logging.error("Redirected to 404! Trying to jump to home page...")
+            driver.get("https://moneyforward.com/")
+            time.sleep(10)
+
         logging.info(f"Final Title: {driver.title}")
         if any(kw in driver.title for kw in ["マネーフォワード", "家計簿", "Dashboard", "ホーム"]):
             logging.info("Login Success!")
         else:
-            # ログイン後の画面が404などでないか確認
-            if "404" in driver.title:
-                logging.error("Final page was 404. MF might be blocking final redirect.")
-            else:
-                logging.warning(f"Login state unclear. Title: {driver.title}")
+            logging.warning(f"Current URL: {driver.current_url}")
+            driver.save_screenshot("login_final_check.png")
 
     except Exception as e:
         logging.error(f"Login failed: {str(e)}")
         driver.save_screenshot("login_error.png")
-        logging.error(f"Current URL: {driver.current_url}")
         raise e
         
 def add_mf_record(dt: datetime, amount: int, store: str, store_info: dict | None):
