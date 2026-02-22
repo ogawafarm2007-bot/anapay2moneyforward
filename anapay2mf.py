@@ -152,57 +152,68 @@ def login_mf():
     email = os.getenv("EMAIL")
     password = os.getenv("PASSWORD")
 
-    # --- チェック機能 ---
     if not email:
         logging.error("!!! EMAIL IS EMPTY !!! Check GitHub Secrets.")
         raise ValueError("EMAIL secret is not set")
     
-    # ログにメールアドレスの「最初の3文字」だけ出して確認（セキュリティ配慮）
     logging.info(f"Login to moneyfoward with email starting with: {email[:3]}***")
     
     from selenium.webdriver.firefox.options import Options
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support.ui import WebDriverWait
+    from selenium.webdriver.support import expected_conditions as EC
+    import time
+    
     options = Options()
     options.add_argument("--headless")
     options.add_argument("--width=1920")
     options.add_argument("--height=1080")
     options.set_preference("intl.accept_languages", "ja-JP, ja")
     
-    # 直接入力画面へ
+    # ブラウザの起動まではHeliumを使います
     helium.start_firefox("https://id.moneyforward.com/sign_in/email", options=options)
+    driver = helium.get_driver()
     
     try:
-        # 1. メールアドレス入力
+        logging.info("Step 1: Waiting for page to load...")
+        time.sleep(3) # 画面が完全に描画されるまで3秒待機
+        
         logging.info("Step 1: Entering email...")
-        # 画面上の「最初の入力欄」を強制的に狙う（名前が何であれ）
-        email_input = helium.S("input[type='email']")
-        if not email_input.exists():
-             email_input = helium.S("input") # それでもダメなら最初のinputタグ
-             
-        helium.wait_until(email_input.exists, timeout_secs=30)
-        helium.write(email, into=email_input)
+        wait = WebDriverWait(driver, 30)
         
-        # ログインするボタンをクリック
-        helium.click("ログインする")
-
-        # 2. パスワード入力
+        # HTMLの構造（type="email"）から直接入力欄を狙い撃つ（絶対外さない方法）
+        email_input = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "input[type='email'], input[name*='email']")))
+        email_input.clear()
+        email_input.send_keys(email)
+        
+        logging.info("Clicking login button...")
+        # 送信ボタンを直接クリック
+        submit_btn = driver.find_element(By.CSS_SELECTOR, "input[type='submit'], button[type='submit']")
+        submit_btn.click()
+        
         logging.info("Step 2: Entering password...")
-        # パスワード欄が出るまで待機
-        pass_input = helium.S("input[type='password']")
-        helium.wait_until(pass_input.exists, timeout_secs=30)
-        helium.write(password, into=pass_input)
+        time.sleep(3) # 画面遷移を3秒待機
         
-        # ログインするボタンをクリック
-        helium.click("ログインする")
-
-        # 3. ログイン完了の確認
+        # パスワード入力欄を狙い撃つ
+        pass_input = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "input[type='password'], input[name*='password']")))
+        pass_input.clear()
+        pass_input.send_keys(password)
+        
+        logging.info("Clicking login button again...")
+        submit_btn2 = driver.find_element(By.CSS_SELECTOR, "input[type='submit'], button[type='submit']")
+        submit_btn2.click()
+        
         logging.info("Step 3: Checking if logged in...")
-        helium.wait_until(helium.Button("手入力").exists, timeout_secs=60)
+        # ログイン完了後、「手入力」という文字が出るか確認
+        wait.until(EC.presence_of_element_located((By.XPATH, "//*[contains(text(), '手入力')]")))
         logging.info("Login Success!")
 
     except Exception as e:
         logging.error(f"Login failed: {e}")
-        helium.get_driver().save_screenshot("login_error.png")
+        driver.save_screenshot("login_error.png")
         raise e
+
+
 def add_mf_record(dt: datetime, amount: int, store: str, store_info: dict | None):
     """
     add record to moneyfoward
