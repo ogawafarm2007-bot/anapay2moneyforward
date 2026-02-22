@@ -153,18 +153,22 @@ def login_mf():
     email = os.getenv("EMAIL")
     password = os.getenv("PASSWORD")
 
-    # https://selenium-python-helium.readthedocs.io/en/latest/api.html
     logging.info("Login to moneyfoward")
     
-    # GitHub Actions（画面がない環境）で動かすための設定
+    # --- ここを最新の設定に差し替え ---
     from selenium.webdriver.firefox.options import Options
+    from selenium.webdriver.firefox.service import Service
+    
     options = Options()
-    options.add_argument("--headless")  # 画面を表示しないモード
+    options.add_argument("--headless")
+    # Firefoxの場所を明示
+    options.binary_location = "/usr/bin/firefox" 
     
-    # ブラウザの起動
     helium.start_firefox(MF_URL, options=options)
-    
+    # --- ここまで ---
+
     helium.wait_until(helium.Button("ログイン").exists)
+    # （以下、メールアドレス入力などの続きはそのまま）
     helium.write(email, into="メールアドレス")
     helium.write(password, into="パスワード")
     helium.click("ログイン")
