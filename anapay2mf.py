@@ -247,7 +247,7 @@ def login_mf():
             except:
                 pass
 
-        # ログイン後のメインページに移動し、さらに待つ
+# ログイン後のメインページに移動し、さらに待つ
         driver.get("https://moneyforward.com/")
         time.sleep(10)
 
