@@ -220,7 +220,21 @@ def login_mf():
         pass_input.send_keys(password)
         
 # options.add_argument("--headless")  <-- これをコメントアウトして試す価値あり
-        
+# --- 2.5 ログイン完了ボタンをクリック ---
+        logging.info("Step 2.5: Forcing final Login button click...")
+        time.sleep(3)
+        try:
+            # 「ログイン」という名前のボタンを直接クリック（Heliumの機能を利用）
+            if helium.Button("ログイン").exists():
+                helium.click("ログイン")
+            else:
+                # ボタン名が違う場合（Nextなど）に備えてXPATHで物理クリック
+                submit_btn = driver.find_element(By.XPATH, "//button[@type='submit'] | //input[@type='submit']")
+                submit_btn.click()
+            logging.info("Submit button clicked physically.")
+        except Exception as e:
+            logging.warning(f"Physical click failed: {e}")
+            pass_input.send_keys(Keys.ENTER) # 最後の手段        
 # --- 3. ログイン成功確認 ---
         logging.info("Step 3: Verifying login...")
         
