@@ -222,12 +222,20 @@ def login_mf():
         except Exception as e:
             logging.warning(f"Enter key failed: {e}")
 
-        # --- 3. ログイン完了待ち ---
+# --- 3. ログイン完了待ち ---
         logging.info("Step 3: Waiting for authentication...")
-        for i in range(10):
+        for i in range(20): # 待ち時間を倍に増やす
             time.sleep(10)
-            logging.info(f"Checking URL... ({i+1}/10): {driver.current_url}")
-            if "id.moneyforward.com" not in driver.current_url:
+            current_url = driver.current_url
+            logging.info(f"Checking URL... ({i+1}/20): {current_url}")
+            
+            if "email_otp" in current_url:
+                logging.warning("!!! 2-Step Verification detected !!!")
+                logging.warning("Please disable 2-step verification in MoneyForward settings.")
+                # ここでスクリーンショットを撮って、認証画面を確認できるようにする
+                driver.save_screenshot("otp_required.png")
+            
+            if "id.moneyforward.com" not in current_url:
                 logging.info("Successfully left ID page!")
                 break
 
