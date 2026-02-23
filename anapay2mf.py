@@ -1,3 +1,140 @@
+"""
+ANA Payの情報をメールから取得してスプレッドシートに書き込む
+それからスプレッドシートの情報を元に、Money Fowardに情報を書き込む
+"""
+
+import base64
+import logging
+import os
+import time
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+
+import gspread
+import helium
+from dateutil import parser
+from dotenv import load_dotenv
+from google.auth.exceptions import RefreshError
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
+
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.keys import Keys
+
+import quickstart
+
+SCOPES = [
+    "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/spreadsheets",
+]
+
+# Google Spreadsheet ID and Sheet name
+SHEET_ID = "1fVCe4-zFnQVv0rRtJPt8TO9DsL3maFxjohYsAvZHclc"
+SHEET_NAME = "ANAPay"
+
+MF_URL = "https://moneyforward.com/cf"
+
+format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+logging.basicConfig(format=format, level=logging.INFO)
+
+load_dotenv()
+
+
+@dataclass
+class ANAPay:
+    """ANA Pay information"""
+
+    email_date: datetime = None
+    date_of_use: datetime = None
+    amount: int = 0
+    store: str = ""
+
+    def values(self) -> tuple[str, str, str, str]:
+        """return tuple of values for spreadsheet"""
+        return self.email_date_str, self.date_of_use_str, self.amount, self.store
+
+    @property
+    def email_date_str(self) -> str:
+        return f"{self.email_date:%Y-%m-%d %H:%M:%S}"
+
+    @property
+    def date_of_use_str(self) -> str:
+        return f"{self.date_of_use:%Y-%m-%d %H:%M:%S}"
+
+
+def get_mail_info(res: dict) -> ANAPay | None:
+    """1件のメールからANA Payの利用情報を取得して返す"""
+    ana_pay = ANAPay()
+    for header in res["payload"]["headers"]:
+        if header["name"] == "Date":
+            date_str = header["value"].replace(" +0900 (JST)", "")
+            ana_pay.email_date = parser.parse(date_str)
+
+    data = res["payload"]["body"]["data"]
+    body = base64.urlsafe_b64decode(data).decode()
+    for line in body.splitlines():
+        if line.startswith("ご利用"):
+            key, value = line.split("：")
+            if key == "ご利用日時":
+                ana_pay.date_of_use = parser.parse(value)
+            elif key == "ご利用金額":
+                ana_pay.amount = int(value.replace(",", "").replace("円", ""))
+            elif key == "ご利用店舗":
+                ana_pay.store = value
+    return ana_pay
+
+
+def get_anapay_info(after: str) -> list[ANAPay]:
+    """gmailからANA Payの利用履歴を取得する"""
+    ana_pay_list = []
+    creds = Credentials.from_authorized_user_file("token.json", SCOPES)
+    service = build("gmail", "v1", credentials=creds)
+
+    query = f"from:payinfo@121.ana.co.jp subject:ご利用のお知らせ after:{after}"
+    results = service.users().messages().list(userId="me", q=query).execute()
+    messages = results.get("messages", [])
+    for message in reversed(messages):
+        res = service.users().messages().get(userId="me", id=message["id"]).execute()
+        ana_pay = get_mail_info(res)
+        if ana_pay:
+            ana_pay_list.append(ana_pay)
+    return ana_pay_list
+
+
+def get_last_email_date(records: list[dict[str, str]]):
+    """get last email date for gmail search"""
+    after = "2023/06/28"
+    if records:
+        last_email_date = parser.parse(records[-1]["email_date"])
+        after = f"{last_email_date:%Y/%m/%d}"
+    return after
+
+
+def gmail2spredsheet(worksheet):
+    """gmailからANA Payの利用履歴を取得しスプレッドシートに書き込む"""
+    records = worksheet.get_all_records()
+    logging.info("Records in spreadsheet: %d", len(records))
+
+    after = get_last_email_date(records)
+    logging.info("Last day on spreadsheet: %s", after)
+    email_date_set = set(parser.parse(r["email_date"]) for r in records)
+
+    ana_pay_list = get_anapay_info(after)
+    logging.info("ANA Pay emails: %d", len(ana_pay_list))
+
+    count = 0
+    for ana_pay in ana_pay_list:
+        if ana_pay.email_date not in email_date_set:
+            worksheet.append_row(ana_pay.values(), value_input_option="USER_ENTERED")
+            count += 1
+            logging.info("Record added to spreadsheet: %s", ana_pay.values())
+    logging.info("Records added to spreadsheet: %d", count)
+
+
 def login_mf():
     """login moneyforward (Hyper-Robust Chrome Edition)"""
     email = os.getenv("EMAIL")
@@ -9,14 +146,6 @@ def login_mf():
     
     logging.info(f"Login to moneyfoward with: {email[:3]}***")
     
-    from selenium.webdriver.chrome.options import Options
-    from selenium.webdriver.common.by import By
-    from selenium.webdriver.support.ui import WebDriverWait
-    from selenium.webdriver.support import expected_conditions as EC
-    from selenium.webdriver.common.keys import Keys
-    import time
-    import helium
-
     options = Options()
     options.add_argument("--headless")
     options.add_argument("--no-sandbox")
@@ -33,7 +162,7 @@ def login_mf():
     try:
         wait = WebDriverWait(driver, 30)
 
-        # --- 0. ログインページへ確実に誘導（前回成功した処理） ---
+        # --- 0. ログインページへ確実に誘導 ---
         logging.info("Step 0: Handling English/Intro page...")
         time.sleep(5)
         entry_selectors = [
@@ -53,7 +182,7 @@ def login_mf():
             except:
                 continue
 
-        # --- 1. メールアドレス入力（前回成功した処理） ---
+        # --- 1. メールアドレス入力 ---
         logging.info("Step 1: Entering email...")
         email_selector = "input[name='mfid_user[email]'], input[type='email'], #mfid_user_email"
         email_input = wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, email_selector)))
@@ -71,29 +200,14 @@ def login_mf():
         logging.info("Step 1.5: Clicking Next (Hyper-Robust)...")
         time.sleep(1)
         try:
-            # 第一の矢：Enterキーを送信（これが一番確実）
             email_input.send_keys(Keys.ENTER)
             logging.info("Pressed ENTER key on email field.")
-        except:
-            # 第二の矢：考えられる全てのボタンタグを狙い撃ち
-            next_selectors = [
-                "//input[@type='submit']",
-                "//button[@type='submit']",
-                "//button[contains(text(), 'Sign in')]",
-                "//input[@value='Sign in']"
-            ]
-            for sel in next_selectors:
-                try:
-                    btn = driver.find_element(By.XPATH, sel)
-                    driver.execute_script("arguments[0].click();", btn)
-                    logging.info(f"Clicked Next using: {sel}")
-                    break
-                except:
-                    continue
+            time.sleep(5)
+        except Exception as e:
+            logging.warning(f"Enter key failed: {e}")
 
         # --- 2. パスワード入力 ---
         logging.info("Step 2: Entering password...")
-        time.sleep(5) # 画面切り替えを長めに待つ
         pass_input = wait.until(EC.visibility_of_element_located((By.NAME, "mfid_user[password]")))
         for char in password:
             pass_input.send_keys(char)
@@ -103,24 +217,10 @@ def login_mf():
         logging.info("Step 2.5: Clicking final Login button (Hyper-Robust)...")
         time.sleep(1)
         try:
-            # ここでもEnterキーで確実に送信
             pass_input.send_keys(Keys.ENTER)
             logging.info("Pressed ENTER key on password field.")
-        except:
-            submit_selectors = [
-                "//input[@type='submit']",
-                "//button[@type='submit']",
-                "//button[contains(text(), 'Sign in')]",
-                "//input[@value='Sign in']"
-            ]
-            for sel in submit_selectors:
-                try:
-                    btn = driver.find_element(By.XPATH, sel)
-                    driver.execute_script("arguments[0].click();", btn)
-                    logging.info(f"Clicked Login using: {sel}")
-                    break
-                except:
-                    continue
+        except Exception as e:
+            logging.warning(f"Enter key failed: {e}")
 
         # --- 3. ログイン完了待ち ---
         logging.info("Step 3: Waiting for authentication...")
@@ -131,10 +231,114 @@ def login_mf():
                 logging.info("Successfully left ID page!")
                 break
 
-        driver.get("https://moneyforward.com/")
+        driver.get("https://moneyforward.com/cf")
         time.sleep(10)
 
     except Exception as e:
         logging.error(f"Login failed: {str(e)}")
         driver.save_screenshot("login_error.png")
         raise e
+
+
+def add_mf_record(dt: datetime, amount: int, store: str, store_info: dict | None):
+    """add record to moneyfoward"""
+    driver = helium.get_driver()
+    wait = WebDriverWait(driver, 30)
+
+    for i in range(5):
+        logging.info(f"Step A: Jumping to CashFlow page (Attempt {i+1})...")
+        driver.get("https://moneyforward.com/cf")
+        time.sleep(15) 
+        if "id.moneyforward.com" not in driver.current_url:
+            logging.info(f"Successfully arrived at CashFlow page: {driver.current_url}")
+            break
+        logging.warning("Redirected back to ID page. The session might not be ready. Retrying...")
+
+    logging.info("Step B: Waiting for 'Manual Input' button...")
+    try:
+        input_btn_xpath = "//*[contains(text(), '手入力')] | //a[contains(., '手入力')] | //button[contains(., '手入力')]"
+        input_btn = wait.until(EC.element_to_be_clickable((By.XPATH, input_btn_xpath)))
+        driver.execute_script("arguments[0].click();", input_btn)
+        logging.info("Step C: Manual Input button clicked.")
+    except Exception as e:
+        logging.error(f"Failed to find button. URL: {driver.current_url}")
+        driver.save_screenshot("manual_input_fail.png")
+        raise e
+    
+    time.sleep(5)
+
+    helium.write(f"{dt:%Y/%m/%d}", into="日付")
+    helium.write(amount, into="支出金額")
+    asset = helium.find_all(helium.ComboBox())[0]
+    for option in asset.options:
+        if option.startswith("ANA Pay"):
+            helium.select(asset, option)
+
+    if store_info:
+        category = helium.find_all(helium.Link("未分類"))[0]
+        l_category = helium.find_all(helium.S("#js-large-category-selected"))[0]
+        helium.click(l_category)
+        helium.click(store_info["大項目"])
+
+        m_category = helium.find_all(helium.S("#js-middle-category-selected"))[0]
+        helium.click(m_category)
+        helium.click(store_info["中項目"])
+
+        helium.write(store_info["店名"], into="内容をご入力下さい(任意)")
+    else:
+        helium.write(store, into="内容をご入力下さい(任意)")
+
+    helium.click("保存する")
+    logging.info(f"Record added to moneyforward: {dt:%Y/%m/%d}, {amount}, {store}")
+
+    helium.wait_until(helium.Button("続けて入力する").exists)
+    helium.click("続けて入力する")
+
+
+def spreadsheet2mf(worksheet, store_dict: dict[str, dict[str, str]]) -> None:
+    """スプレッドシートからmoneyfowardに書き込む"""
+    records = worksheet.get_all_records()
+
+    if all(record["mf"] == "done" for record in records):
+        logging.info("All records are already marked as 'done'.")
+        return
+
+    login_mf()
+    added = 0
+    for count, record in enumerate(records):
+        if record["mf"] != "done":
+            date_of_use = parser.parse(record["date_of_use"])
+            amount = int(record["amount"])
+            store = record["store"]
+            add_mf_record(date_of_use, amount, store, store_dict.get(store))
+
+            worksheet.update_cell(count + 2, 5, "done")
+            added += 1
+    helium.kill_browser()
+
+    logging.info(f"Records added to moneyforward: {added}")
+
+
+def main():
+    try:
+        creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+        service = build('gmail', 'v1', credentials=creds)
+        results = service.users().labels().list(userId='me').execute()
+    except RefreshError:
+        Path("token.json").unlink(missing_ok=True)
+        quickstart.main()
+
+    gc = gspread.oauth(
+        credentials_filename="credentials.json", authorized_user_filename="token.json"
+    )
+    sheet = gc.open_by_key(SHEET_ID)
+    anapay_sheet = sheet.worksheet("ANAPay")
+    store_sheet = sheet.worksheet("ANAPayStore")
+    store_dict = {store["store"]: store for store in store_sheet.get_all_records()}
+
+    gmail2spredsheet(anapay_sheet)
+    spreadsheet2mf(anapay_sheet, store_dict)
+
+
+if __name__ == "__main__":
+    main()
