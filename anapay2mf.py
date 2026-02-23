@@ -186,31 +186,34 @@ def login_mf():
     try:
         wait = WebDriverWait(driver, 30)
 
-# --- 0. ログインページへ確実に誘導 ---
+# --- 0. ログインページへ確実に誘導（英語・紹介ページ対策） ---
         logging.info("Step 0: Handling English/Intro page...")
         time.sleep(5)
-        try:
-            # スクリーンショットに写っている白い「Sign in」ボタンを探す
-            # テキストが "Sign in" または XPATH で "/sign_in" を含む要素を狙い撃ちします
-            sign_in_selectors = [
-                "//a[contains(text(), 'Sign in')]",
-                "//a[contains(@class, 'button') and contains(text(), 'Sign in')]",
-                "//a[contains(@href, 'sign_in')]"
-            ]
-            
-            for selector in sign_in_selectors:
+        
+        # 案内ページの "Sign in" ボタン、または日本語の "ログイン" ボタンを探してクリック
+        entry_selectors = [
+            "//a[contains(text(), 'Sign in')]",
+            "//a[contains(text(), 'ログイン')]",
+            "//a[contains(@href, 'sign_in')]",
+            "//button[contains(text(), 'Sign in')]"
+        ]
+        
+        for selector in entry_selectors:
+            try:
                 elements = driver.find_elements(By.XPATH, selector)
                 if elements:
-                    logging.info(f"Sign in button found! Clicking: {selector}")
+                    logging.info(f"Entry button found! Clicking: {selector}")
                     driver.execute_script("arguments[0].click();", elements[0])
-                    time.sleep(5)
+                    time.sleep(5) # 画面遷移を待つ
                     break
-        except Exception as e:
-            logging.warning(f"Intro page skip failed, but continuing: {e}")
+            except:
+                continue
 
         # --- 1. メールアドレス入力 ---
         logging.info("Step 1: Entering email...")
-        # (ここから下の Step 1 以降は、前回お伝えした「複数のセレクターで探す」コードのままでOKです)
+        # 英語環境でも見つけやすいようにセレクターを広めに設定
+        email_selector = "input[name='mfid_user[email]'], input[type='email'], #mfid_user_email"
+        email_input = wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, email_selector)))
         
         # 複数の候補（Name, ID, CSS, Type）で、とにかくメール入力欄らしきものを探す
         selectors = [
